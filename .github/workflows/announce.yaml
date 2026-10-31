@@ -1,0 +1,43 @@
+name: Announce
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  discord:
+    name: Post to Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post the release to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          TAG: ${{ github.event.release.tag_name }}
+          URL: ${{ github.event.release.html_url }}
+          NOTES: ${{ github.event.release.body }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL is not set; skipping."
+            exit 0
+          fi
+          jq -n --arg tag "$TAG" --arg url "$URL" --arg notes "$NOTES" --arg owner "$OWNER" '
+            ($notes | capture("<!-- releases: (?<r>[^>]*?) -->").r // "" | split(" ") | map(select(. != ""))) as $repos
+            | ($notes | gsub("\\s*<!-- releases:[^>]*-->\\s*"; "")) as $body
+            | {
+                username: "Huddle Releases",
+                allowed_mentions: {parse: []},
+                embeds: [{
+                  title: "Huddle \($tag) is live",
+                  url: $url,
+                  color: 5763719,
+                  description: (if ($body | length) > 4000 then $body[:4000] + "\n…" else $body end),
+                  fields: (if ($repos | length) > 0 then [{
+                    name: "Releases",
+                    value: ($repos | map("[\(.) \($tag)](https://github.com/\($owner)/\(.)/releases/tag/\($tag))") | join(" · "))
+                  }] else [] end)
+                }]
+              }' | curl -fsS -H "Content-Type: application/json" -d @- "$WEBHOOK"
