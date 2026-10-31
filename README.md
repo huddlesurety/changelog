@@ -1,4 +1,4 @@
-# Huddle Surety changelog
+# Changelog
 
 What's new in [Huddle Surety](https://huddlesurety.com), release by release.
 
